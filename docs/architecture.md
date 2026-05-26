@@ -91,7 +91,7 @@ This enables:
 - Replay for debugging
 - Multiple concurrent sessions per agent
 
-Checkpoints stored in `orchid_checkpoints.db` (SQLite) by default.
+Checkpoints stored in `agentOrch_checkpoints.db` (SQLite) by default.
 
 ## Async Agent-to-Agent Messaging
 

@@ -72,8 +72,8 @@ frontend/.turbo/
 *.db
 *.sqlite
 *.sqlite3
-orchid.db
-orchid_checkpoints.db
+agentOrch.db
+agentOrch_checkpoints.db
 data/
 
 # ─── Vector Store (ChromaDB) ──────────────────────────────────────────────────
@@ -135,7 +135,7 @@ temp/
 *.zip
 *.tar.gz
 *.rar
-orchid-platform.zip
+agentOrch-platform.zip
 
 # ─── Jupyter ──────────────────────────────────────────────────────────────────
 .ipynb_checkpoints/

@@ -12,27 +12,27 @@
 ┌─────────────────────────────────────────────────────────────────┐
 │                        AgentOrch Platform                       │
 │                                                                 │
-│  ┌──────────┐    ┌──────────────┐    ┌──────────────────────┐  │
-│  │  Next.js │    │  FastAPI     │    │   Agent Runtime      │  │
-│  │  Web UI  │◄──►│  REST + WS   │◄──►│   (LangGraph)        │  │
-│  └──────────┘    └──────┬───────┘    └──────────┬───────────┘  │
-│                         │                       │              │
-│                  ┌──────▼──────┐       ┌────────▼──────────┐  │
-│                  │  SQLite /   │       │  Tool Executors   │  │
-│                  │  Postgres   │       │  web_search       │  │
-│                  └─────────────┘       │  code_executor    │  │
-│                                        │  file_reader      │  │
-│  ┌─────────────────────────────┐       └───────────────────┘  │
-│  │  Messaging Channels         │                               │
-│  │  ┌──────────┐ ┌──────────┐  │    ┌───────────────────────┐ │
-│  │  │ Telegram │ │  Slack   │  │    │  Vector Memory        │ │
-│  │  │  (Bot)   │ │  (OAuth) │  │    │  ChromaDB (local)     │ │
-│  │  └──────────┘ └──────────┘  │    └───────────────────────┘ │
-│  └─────────────────────────────┘                               │
+│  ┌──────────┐    ┌──────────────┐    ┌──────────────────────┐   │
+│  │  Next.js │    │  FastAPI     │    │   Agent Runtime      │   │
+│  │  Web UI  │◄──►│  REST + WS   │◄──►│   (LangGraph)        │   │
+│  └──────────┘    └──────┬───────┘    └──────────┬───────────┘   │
+│                         │                       │               │
+│                  ┌──────▼──────┐       ┌────────▼──────────┐    │
+│                  │  SQLite /   │       │  Tool Executors   │    │
+│                  │  Postgres   │       │  web_search       │    │
+│                  └─────────────┘       │  code_executor    │    │
+│                                        │  file_reader      │    │
+│  ┌─────────────────────────────┐       └───────────────────┘    │
+│  │  Messaging Channels         │                                │
+│  │  ┌──────────┐ ┌──────────┐  │    ┌───────────────────────┐   │
+│  │  │ Telegram │ │  Slack   │  │    │  Vector Memory        │   │
+│  │  │  (Bot)   │ │  (OAuth) │  │    │  ChromaDB (local)     │   │
+│  │  └──────────┘ └──────────┘  │    └───────────────────────┘   │
+│  └─────────────────────────────┘                                │
 │                                                                 │
-│  ┌────────────────────────────────────────────────────────┐    │
-│  │  Redis Queue (async agent-to-agent messaging)          │    │
-│  └────────────────────────────────────────────────────────┘    │
+│  ┌────────────────────────────────────────────────────────┐     │
+│  │  Redis Queue (async agent-to-agent messaging)          │     │
+│  └────────────────────────────────────────────────────────┘     │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -252,7 +252,7 @@ OPENAI_API_KEY=sk-...
 SLACK_BOT_TOKEN=xoxb-...
 SLACK_APP_TOKEN=xapp-...
 WEBHOOK_URL=https://your-domain.com   # for Telegram webhook mode
-DATABASE_URL=sqlite:///orchid.db      # or postgresql://...
+DATABASE_URL=sqlite:///agentOrch.db      # or postgresql://...
 REDIS_URL=redis://localhost:6379      # leave unset for in-memory queue
 CHROMA_HOST=localhost                 # for vector memory
 ```

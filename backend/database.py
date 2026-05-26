@@ -2,11 +2,12 @@
 Database — async SQLAlchemy setup.
 Defaults to SQLite for local dev; set DATABASE_URL env var for PostgreSQL.
 """
+
 import os
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase
 
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///orchid.db")
+DATABASE_URL = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///agentOrch.db")
 
 engine = create_async_engine(
     DATABASE_URL,

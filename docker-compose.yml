@@ -11,7 +11,7 @@ services:
       - GROQ_API_KEY=${GROQ_API_KEY}
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
       - SLACK_BOT_TOKEN=${SLACK_BOT_TOKEN}
-      - DATABASE_URL=sqlite+aiosqlite:///data/orchid.db
+      - DATABASE_URL=sqlite+aiosqlite:///data/agentOrch.db
       - REDIS_URL=redis://redis:6379
       - WEBHOOK_URL=${WEBHOOK_URL:-}
     volumes:
