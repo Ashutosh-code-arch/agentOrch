@@ -48,11 +48,6 @@
 - **Streaming** — `astream_events` lets us push real-time token updates to the frontend WebSocket.
 - **Conditional edges** — `add_conditional_edges` maps directly to the "conditions and feedback loops" requirement without custom routing logic.
 
-Alternatives considered:
-- **CrewAI** — great for role-based crews but limited conditional branching; more opinionated about agent behavior.
-- **AutoGen** — excellent for code-generation heavy workflows; heavier setup, more suited to developer-tool contexts.
-- **LangChain agents** — useful but lacks native graph topology; harder to represent complex multi-agent pipelines visually.
-
 ### Backend: Python + FastAPI
 - **FastAPI** — async by default, WebSocket support, OpenAPI docs auto-generated, Pydantic validation.
 - **SQLAlchemy + SQLite** (default) / **PostgreSQL** (production) — clean ORM, migrations via Alembic.
@@ -161,7 +156,7 @@ Each agent is configurable across **11 dimensions**:
 |-----------|---------|
 | Name & Role | Free text |
 | System Prompt | Full prompt engineering |
-| Model | claude-sonnet-4, haiku, gpt-4o, local Ollama |
+| Model | llama, gpt-4o, local Ollama, claude-sonnet-4 |
 | Tools | web_search, code_executor, file_reader, send_message, calendar, database_query |
 | Channel | Telegram, Slack, WhatsApp, API-only |
 | Memory | Conversation window, Vector RAG, Sliding+summary, None |
@@ -247,8 +242,8 @@ GROQ_API_KEY=sk-ant-...
 TELEGRAM_BOT_TOKEN=7412...:AAF4...
 
 # Optional
-ANTHROPIC_API_KEY=sk-ant-...
 OPENAI_API_KEY=sk-...
+ANTHROPIC_API_KEY=sk-ant-...
 SLACK_BOT_TOKEN=xoxb-...
 SLACK_APP_TOKEN=xapp-...
 WEBHOOK_URL=https://your-domain.com   # for Telegram webhook mode
