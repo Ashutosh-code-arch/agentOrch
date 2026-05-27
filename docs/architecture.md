@@ -64,7 +64,7 @@ User (Telegram)
 5.  LangGraph StateGraph enters agent_node:
       a. Build messages: [SystemMessage(aria_prompt), HumanMessage("Research...")]
       b. Call Groq API (streaming)
-      c. Claude decides to delegate → publishes to bus:
+      c. Groq decides to delegate → publishes to bus:
          { from: "aria", to: "max", content: "research: AI news", type: "delegate" }
                 │
 6.  Max's AgentRuntime receives delegation:
