@@ -29,7 +29,7 @@ User (Telegram)
 │  StateGraph  │                 │  → Browser UI   │
 │              │                 └─────────────────┘
 │  ┌─────────┐ │
-│  │  LLM    │ │   Claude / GPT / Ollama
+│  │  LLM    │ │   Groq / GPT / Ollama / Claude 
 │  │  Node   │ │
 │  └────┬────┘ │
 │       │      │
