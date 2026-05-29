@@ -59,5 +59,5 @@ docker:
 clean:
 	rm -rf backend/.venv backend/__pycache__ backend/**/__pycache__
 	rm -rf frontend/node_modules frontend/.next
-	rm -f orchid.db orchid_checkpoints.db
+	rm -f agentOrch.db agentOrch_checkpoints.db
 	rm -rf .chroma
