@@ -30,7 +30,7 @@ setup:
 dev:
 	@echo "→ Starting AgentOrch (backend + frontend)..."
 	@trap 'kill %1 %2' SIGINT; \
-	  (cd backend && .venv/bin/uvicorn main:app --reload --port 8000) & \
+	  (uvicorn backend.main:app --reload --port 8000) & \
 	  (cd frontend && npm run dev) & \
 	  wait
 
