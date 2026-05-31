@@ -9,6 +9,7 @@ import { deployWorkflow, runWorkflow, useAgents } from "@/lib/api";
 
 export default function WorkflowsPage() {
     const { agents } = useAgents();
+    const [workflows, setWorkflows] = useState<WorkflowDef[]>(WORKFLOWS);
     const [activeIdx, setActiveIdx] = useState(0);
     const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
     const [running, setRunning] = useState(false);
@@ -25,45 +26,119 @@ export default function WorkflowsPage() {
         text: string;
     } | null>(null);
 
-    // Build a real workflow from actual agents
     const buildLiveWorkflow = (base: WorkflowDef): WorkflowDef => {
-        const telegramAgent = agents.find(
-            (a) => a.channel?.toLowerCase() === "telegram" && a.is_active,
-        );
-        const researchAgent = agents.find(
-            (a) => a.role.toLowerCase().includes("research") && a.is_active,
-        );
-        const supportAgent = agents.find(
-            (a) => a.role.toLowerCase().includes("support") && a.is_active,
-        );
+        const activeAgents = agents.filter((a) => a.is_active);
+        const findByRole = (role: string) =>
+            activeAgents.find((a) =>
+                `${a.name} ${a.role}`.toLowerCase().includes(role),
+            );
+        const findForNode = (node: WorkflowNode, index: number) => {
+            const role = String(node.config?.role ?? "").toLowerCase();
+            return (
+                (role ? findByRole(role) : null) ??
+                (node.label.toLowerCase().includes("telegram")
+                    ? activeAgents.find(
+                          (a) => a.channel?.toLowerCase() === "telegram",
+                      )
+                    : null) ??
+                activeAgents[index % Math.max(activeAgents.length, 1)]
+            );
+        };
 
+        let agentIndex = 0;
         return {
             ...base,
             nodes: base.nodes.map((n) => {
                 if (n.type === "agent") {
-                    if (
-                        n.label.toLowerCase().includes("aria") ||
-                        n.label.toLowerCase().includes("support")
-                    ) {
-                        const a = telegramAgent || supportAgent;
-                        if (a) return { ...n, label: a.name, sub: a.role };
-                    }
-                    if (
-                        n.label.toLowerCase().includes("max") ||
-                        n.label.toLowerCase().includes("research")
-                    ) {
-                        const a = researchAgent;
-                        if (a) return { ...n, label: a.name, sub: a.role };
-                    }
+                    const a = findForNode(n, agentIndex);
+                    agentIndex += 1;
+                    if (a)
+                        return {
+                            ...n,
+                            label: a.name,
+                            sub: a.role,
+                            config: { ...(n.config ?? {}), agent_id: a.id },
+                        };
                 }
                 return n;
             }),
         };
     };
 
-    const baseWf = WORKFLOWS[activeIdx];
+    const baseWf = workflows[activeIdx];
     const liveWf = agents.length > 0 ? buildLiveWorkflow(baseWf) : baseWf;
     const selNode = liveWf.nodes.find((n) => n.id === selectedNodeId) ?? null;
+
+    function updateActiveWorkflow(updater: (wf: WorkflowDef) => WorkflowDef) {
+        setWorkflows((items) =>
+            items.map((wf, i) => (i === activeIdx ? updater(wf) : wf)),
+        );
+    }
+
+    function addNode(type: WorkflowNode["type"]) {
+        const count = baseWf.nodes.length + 1;
+        const id = `${type}_${Date.now()}`;
+        const defaults: Record<WorkflowNode["type"], Pick<WorkflowNode, "label" | "sub">> = {
+            trigger: { label: "New Trigger", sub: "event source" },
+            agent: { label: "Unassigned Agent", sub: "select an active agent" },
+            condition: {
+                label: "New Condition",
+                sub: "'yes' in state.output.lower()",
+            },
+            action: { label: "New Action", sub: "send_message" },
+        };
+        const node: WorkflowNode = {
+            id,
+            type,
+            ...defaults[type],
+            x: 80 + (count % 4) * 170,
+            y: 80 + Math.floor(count / 4) * 95,
+            config:
+                type === "condition"
+                    ? { expression: "'yes' in state.output.lower()" }
+                    : type === "action"
+                      ? { action: "send_message" }
+                      : {},
+        };
+        updateActiveWorkflow((wf) => ({
+            ...wf,
+            nodes: [...wf.nodes, node],
+            edges: selectedNodeId
+                ? [...wf.edges, [selectedNodeId, id]]
+                : wf.edges,
+        }));
+        setSelectedNodeId(id);
+    }
+
+    function addFeedbackLoop() {
+        if (!selectedNodeId) return;
+        const target =
+            baseWf.nodes
+                .slice()
+                .reverse()
+                .find((n) => n.id !== selectedNodeId && n.type === "agent") ??
+            baseWf.nodes.find((n) => n.id !== selectedNodeId);
+        if (!target) return;
+        updateActiveWorkflow((wf) => ({
+            ...wf,
+            edges: wf.edges.some(
+                ([from, to]) => from === selectedNodeId && to === target.id,
+            )
+                ? wf.edges
+                : [...wf.edges, [selectedNodeId, target.id]],
+        }));
+    }
+
+    function updateNode(nodeId: string, patch: Partial<WorkflowNode>) {
+        updateActiveWorkflow((wf) => ({
+            ...wf,
+            nodes: wf.nodes.map((n) =>
+                n.id === nodeId
+                    ? { ...n, ...patch, config: { ...(n.config ?? {}), ...(patch.config ?? {}) } }
+                    : n,
+            ),
+        }));
+    }
 
     async function handleRun() {
         const input =
@@ -76,6 +151,7 @@ export default function WorkflowsPage() {
                 liveWf.id,
                 input,
                 `ui_wf_${Date.now()}`,
+                liveWf,
             );
             setRunResult({
                 ok: !res.error,
@@ -142,7 +218,7 @@ export default function WorkflowsPage() {
 
             {/* Workflow tabs */}
             <div className="tabs" style={{ marginBottom: 12 }}>
-                {WORKFLOWS.map((w, i) => (
+                {workflows.map((w, i) => (
                     <button
                         key={w.id}
                         className={`tab ${activeIdx === i ? "active" : ""}`}
@@ -242,26 +318,39 @@ export default function WorkflowsPage() {
                         <button
                             className="btn-secondary"
                             style={{ fontSize: 11 }}
+                            onClick={() => addNode("trigger")}
                         >
                             + Trigger
                         </button>
                         <button
                             className="btn-secondary"
                             style={{ fontSize: 11 }}
+                            onClick={() => addNode("agent")}
                         >
                             + Agent Node
                         </button>
                         <button
                             className="btn-secondary"
                             style={{ fontSize: 11 }}
+                            onClick={() => addNode("condition")}
                         >
                             + Condition
                         </button>
                         <button
                             className="btn-secondary"
                             style={{ fontSize: 11 }}
+                            onClick={() => addNode("action")}
                         >
                             + Action
+                        </button>
+                        <button
+                            className="btn-secondary"
+                            style={{ fontSize: 11 }}
+                            onClick={addFeedbackLoop}
+                            disabled={!selectedNodeId}
+                            title="Connect the selected node back to an earlier agent"
+                        >
+                            + Feedback Loop
                         </button>
                         <button
                             className="btn-secondary"
@@ -325,6 +414,7 @@ export default function WorkflowsPage() {
                         nodeId={selectedNodeId}
                         workflow={liveWf}
                         agents={agents}
+                        onUpdateNode={updateNode}
                     />
                     <div className="card" style={{ marginTop: 12 }}>
                         <div className="card-title" style={{ marginBottom: 8 }}>
@@ -357,14 +447,14 @@ function TemplateModal({
 }) {
     const templates = [
         {
-            icon: "🔬",
+            icon: "R",
             name: "Research → Summarize → Publish",
             desc: "Fetch data, condense, deliver to Telegram.",
             tags: ["3 agents", "Telegram", "web_search"],
             idx: 0,
         },
         {
-            icon: "🎯",
+            icon: "S",
             name: "Support Triage System",
             desc: "Receive, classify, route to specialist.",
             tags: ["2 agents", "Telegram"],

@@ -52,6 +52,10 @@ const DEFAULT_FORM = {
     memory_type: "window",
     memory_window: 20,
     schedule: "always",
+    max_tokens_per_call: 4096,
+    max_tokens_per_day: "",
+    skills: "",
+    interaction_rules: "",
     tools: [] as string[],
     guardrails: ["content_filter", "rate_limit"],
 };
@@ -97,9 +101,20 @@ export default function AgentModal({
         setLoading(true);
         setError("");
         try {
+            const parsedRules = form.interaction_rules.trim()
+                ? JSON.parse(form.interaction_rules)
+                : {};
             await createAgent({
                 ...form,
                 channel: form.channel || null,
+                max_tokens_per_day: form.max_tokens_per_day
+                    ? Number(form.max_tokens_per_day)
+                    : null,
+                skills: form.skills
+                    .split(",")
+                    .map((s) => s.trim())
+                    .filter(Boolean),
+                interaction_rules: parsedRules,
             });
             onCreated();
         } catch (e: unknown) {
@@ -254,6 +269,18 @@ export default function AgentModal({
                         </select>
                     </div>
                     <div className="form-group">
+                        <div className="form-label">Memory Window</div>
+                        <input
+                            className="form-input"
+                            type="number"
+                            min={1}
+                            value={form.memory_window}
+                            onChange={(e) =>
+                                set("memory_window", Number(e.target.value))
+                            }
+                        />
+                    </div>
+                    <div className="form-group">
                         <div className="form-label">Schedule</div>
                         <select
                             className="form-select"
@@ -265,6 +292,31 @@ export default function AgentModal({
                             <option value="0 * * * *">Hourly</option>
                             <option value="0 9 * * *">Daily 9am</option>
                         </select>
+                    </div>
+                    <div className="form-group">
+                        <div className="form-label">Max Tokens / Call</div>
+                        <input
+                            className="form-input"
+                            type="number"
+                            min={1}
+                            value={form.max_tokens_per_call}
+                            onChange={(e) =>
+                                set("max_tokens_per_call", Number(e.target.value))
+                            }
+                        />
+                    </div>
+                    <div className="form-group">
+                        <div className="form-label">Max Tokens / Day</div>
+                        <input
+                            className="form-input"
+                            type="number"
+                            min={1}
+                            placeholder="No daily cap"
+                            value={form.max_tokens_per_day}
+                            onChange={(e) =>
+                                set("max_tokens_per_day", e.target.value)
+                            }
+                        />
                     </div>
                     <div
                         className="form-group"
@@ -301,6 +353,33 @@ export default function AgentModal({
                                 </label>
                             ))}
                         </div>
+                    </div>
+                    <div
+                        className="form-group"
+                        style={{ gridColumn: "1 / -1" }}
+                    >
+                        <div className="form-label">Skills</div>
+                        <input
+                            className="form-input"
+                            placeholder="comma_separated_skill_names"
+                            value={form.skills}
+                            onChange={(e) => set("skills", e.target.value)}
+                        />
+                    </div>
+                    <div
+                        className="form-group"
+                        style={{ gridColumn: "1 / -1" }}
+                    >
+                        <div className="form-label">Interaction Rules</div>
+                        <textarea
+                            className="form-textarea"
+                            rows={3}
+                            placeholder='{"can_message":["research"],"priority":"normal"}'
+                            value={form.interaction_rules}
+                            onChange={(e) =>
+                                set("interaction_rules", e.target.value)
+                            }
+                        />
                     </div>
                 </div>
 

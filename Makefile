@@ -20,7 +20,7 @@ setup:
 	@echo "→ Backend: creating venv and installing deps..."
 	cd backend && python -m venv .venv && .venv/bin/pip install --quiet -r requirements.txt
 	@echo "→ Backend: initializing database..."
-	cd backend && .venv/bin/python -c "import asyncio; from backend.database import init_db; asyncio.run(init_db())"
+	backend/.venv/bin/python -c "import asyncio; from backend.database import init_db; asyncio.run(init_db())"
 	@echo "→ Frontend: installing Node deps..."
 	cd frontend && npm install --silent
 	@echo ""
@@ -36,7 +36,7 @@ dev:
 
 ## Backend only
 backend:
-	cd backend && .venv/bin/uvicorn main:app --reload --port 8000
+	backend/.venv/bin/uvicorn backend.main:app --reload --port 8000
 
 ## Frontend only
 frontend:
@@ -44,11 +44,11 @@ frontend:
 
 ## Run tests
 test:
-	cd backend && .venv/bin/pytest tests/ -v --tb=short --cov=backend --cov-report=term-missing
+	backend/.venv/bin/pytest backend/tests/ -v --tb=short --cov=backend --cov-report=term-missing
 
 ## Lint
 lint:
-	cd backend && .venv/bin/ruff check .
+	backend/.venv/bin/ruff check backend
 	cd frontend && npx tsc --noEmit
 
 ## Docker Compose (production-like local stack)

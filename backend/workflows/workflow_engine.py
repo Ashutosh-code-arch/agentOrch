@@ -3,14 +3,30 @@ Workflow Engine — builds LangGraph StateGraphs from visual workflow configs.
 Supports: sequential chains, conditional branching, feedback loops, parallel fans.
 """
 import logging
+import json
+import re
 from typing import Callable
 from dataclasses import dataclass, field
 
 from langgraph.graph import StateGraph, END
 
+from backend.agents.tool_registry import ToolRegistry
 from backend.runtime.message_bus import MessageBus, AgentMessage
 
 logger = logging.getLogger(__name__)
+
+_INTERNAL_PATTERNS = [
+    r"DELEGATE_TO_\w+:\s*[^\n]*\n?",
+    r"ROUTE_TO_\w+:\s*[^\n]*\n?",
+    r"\[INTERNAL:[^\]]*\]\n?",
+    r"\[LOG:[^\]]*\]\n?",
+]
+
+
+def clean_workflow_output(text: str) -> str:
+    for pattern in _INTERNAL_PATTERNS:
+        text = re.sub(pattern, "", text or "", flags=re.IGNORECASE)
+    return text.strip()
 
 
 @dataclass
@@ -56,6 +72,7 @@ class WorkflowEngine:
         self.config = workflow_config
         self.message_bus = message_bus
         self.agent_runtimes = agent_runtimes
+        self.tool_registry = ToolRegistry()
         self._graph = None
 
     def _resolve_runtime(self, node: dict):
@@ -78,6 +95,33 @@ class WorkflowEngine:
                 if role_hint in haystack or any(part and part in haystack for part in role_hint.split()):
                     return runtime
         return None
+
+    async def _run_research_fallback(
+        self,
+        *,
+        runtime,
+        query: str,
+        state: WorkflowState,
+    ) -> str:
+        agent_name = getattr(getattr(runtime, "agent", None), "name", "Research Agent")
+        await self.message_bus.publish(
+            AgentMessage(
+                from_agent=agent_name,
+                to_agent="monitor",
+                content=f"[tool:web_search] {json.dumps({'max_results': 5, 'query': query})}",
+                session_id=state.session_id,
+                msg_type="tool_call",
+                metadata=state.context,
+            )
+        )
+        tool = self.tool_registry.get("web_search")
+        if not tool:
+            return f"Research tool unavailable. Original research question: {query}"
+        result = await tool.arun({"query": query, "max_results": 5})
+        return (
+            "Research notes from web_search. Use these notes to answer the "
+            f"user's original question clearly.\n\nQuestion: {query}\n\n{result}"
+        )
 
     async def build(self):
         """Compile the StateGraph from workflow config."""
@@ -170,21 +214,68 @@ class WorkflowEngine:
 
             async def agent_node(state: WorkflowState) -> WorkflowState:
                 state.current_node = node["id"]
+                role = str(node_cfg.get("role", "")).lower()
                 runtime = self._resolve_runtime(node)
                 if not runtime:
                     state.error = f"Agent {agent_id or node.get('label', node['id'])} not found"
                     return state
                 try:
+                    if (
+                        state.context.get("force_research")
+                        and role == "support"
+                    ):
+                        result = "Research request routed to the research pipeline."
+                        agent_name = getattr(
+                            getattr(runtime, "agent", None),
+                            "name",
+                            "Support Agent",
+                        )
+                        await self.message_bus.publish(
+                            AgentMessage(
+                                from_agent=agent_name,
+                                to_agent="Research Agent",
+                                content="Research request routed to the research agent.",
+                                session_id=state.session_id,
+                                msg_type="delegate",
+                                metadata=state.context,
+                            )
+                        )
+                        state.intermediate_results[node["id"]] = result
+                        state.output = state.input
+                        return state
+
+                    if state.error:
+                        return state
+
                     prev_result = state.output or state.input
                     result = await runtime.run(
                         user_message=prev_result,
                         session_id=state.session_id,
                         context=state.context,
                     )
+                    result = clean_workflow_output(result)
                     state.intermediate_results[node["id"]] = result
                     state.output = result
                 except Exception as e:
-                    state.error = str(e)
+                    if role == "research":
+                        logger.warning(
+                            "Research agent failed; using web_search fallback: %s",
+                            e,
+                        )
+                        try:
+                            result = await self._run_research_fallback(
+                                runtime=runtime,
+                                query=state.input,
+                                state=state,
+                            )
+                            result = clean_workflow_output(result)
+                            state.intermediate_results[node["id"]] = result
+                            state.output = result
+                            state.error = None
+                        except Exception as fallback_error:
+                            state.error = str(fallback_error)
+                    else:
+                        state.error = str(e)
                 return state
             return agent_node
 
@@ -207,14 +298,26 @@ class WorkflowEngine:
 
             async def action_node(state: WorkflowState) -> WorkflowState:
                 state.current_node = node["id"]
+                if state.error:
+                    return state
                 if action_type == "send_message":
                     channel = node_cfg.get("channel", "telegram")
                     chat_id = state.context.get("chat_id")
-                    if channel == "telegram" and chat_id:
+                    content = clean_workflow_output(state.output)
+                    if state.context.get("suppress_channel_reply"):
+                        await self.message_bus.publish(AgentMessage(
+                            from_agent="workflow",
+                            to_agent="monitor",
+                            content=content,
+                            session_id=state.session_id,
+                            msg_type="response",
+                            metadata={"channel": channel},
+                        ))
+                    elif channel == "telegram" and chat_id:
                         await self.message_bus.publish(AgentMessage(
                             from_agent="workflow",
                             to_agent="telegram_channel",
-                            content=state.output,
+                            content=content,
                             session_id=state.session_id,
                             msg_type="channel_reply",
                             metadata={"channel": channel, "chat_id": chat_id},
@@ -223,7 +326,7 @@ class WorkflowEngine:
                         await self.message_bus.publish(AgentMessage(
                             from_agent="workflow",
                             to_agent="monitor",
-                            content=state.output,
+                            content=content,
                             session_id=state.session_id,
                             msg_type="response",
                             metadata={"channel": channel},
@@ -248,7 +351,7 @@ class WorkflowEngine:
             session_id=session_id,
             context=context or {},
         )
-        config = {"configurable": {"thread_id": session_id}}
+        config = {"configurable": {"thread_id": session_id}, "recursion_limit": 25}
         result = await self._graph.ainvoke(state, config)
         if isinstance(result, WorkflowState):
             return result
@@ -260,37 +363,40 @@ class WorkflowEngine:
 WORKFLOW_TEMPLATES = {
     "research_summarize_publish": {
         "name": "Research → Summarize → Publish",
-        "description": "ResearchAgent fetches data, SummaryAgent condenses it, PublishAgent delivers to Telegram.",
+        "description": "A triage agent routes research requests to research and writer agents, then publishes the result.",
         "nodes": [
             {"id": "trigger", "type": "trigger", "label": "Telegram Message", "config": {"channel": "telegram"}},
-            {"id": "aria", "type": "agent", "label": "Aria (Classify)", "config": {"agent_id": "aria", "role": "classify intent"}},
-            {"id": "max", "type": "agent", "label": "Max (Research)", "config": {"agent_id": "max", "tools": ["web_search"]}},
-            {"id": "zoe", "type": "agent", "label": "Zoe (Write)", "config": {"agent_id": "zoe"}},
+            {"id": "triage", "type": "agent", "label": "Support / Triage Agent", "config": {"role": "support"}},
+            {"id": "check_research", "type": "condition", "label": "Is research?", "config": {"expression": "'research' in state.output.lower() or state.context.get('force_research', False)"}},
+            {"id": "research", "type": "agent", "label": "Research Agent", "config": {"role": "research", "tools": ["web_search"]}},
+            {"id": "writer", "type": "agent", "label": "Writer Agent", "config": {"role": "writer"}},
             {"id": "publish", "type": "action", "label": "Send to Telegram", "config": {"action": "send_message", "channel": "telegram"}},
         ],
         "edges": [
-            ["trigger", "aria"],
-            ["aria", "max"],
-            ["max", "zoe"],
-            ["zoe", "publish"],
+            ["trigger", "triage"],
+            ["triage", "check_research"],
+            ["check_research", "publish"],
+            ["check_research", "research"],
+            ["research", "writer"],
+            ["writer", "publish"],
         ]
     },
     "support_triage": {
         "name": "Support Triage System",
-        "description": "Aria receives messages, classifies and routes to specialist or escalation agent.",
+        "description": "A support agent receives messages, classifies urgency, and routes to an escalation agent when needed.",
         "nodes": [
             {"id": "trigger", "type": "trigger", "label": "Inbound Message", "config": {}},
-            {"id": "aria", "type": "agent", "label": "Aria (Triage)", "config": {"agent_id": "aria"}},
+            {"id": "triage", "type": "agent", "label": "Support / Triage Agent", "config": {"role": "support"}},
             {"id": "check_urgency", "type": "condition", "label": "Urgent?", "config": {"expression": "'urgent' in state.output.lower() or 'emergency' in state.output.lower()"}},
-            {"id": "kai", "type": "agent", "label": "Kai (Escalate)", "config": {"agent_id": "kai"}},
+            {"id": "escalation", "type": "agent", "label": "Escalation Agent", "config": {"role": "escalation"}},
             {"id": "auto_reply", "type": "action", "label": "Auto-Reply", "config": {"action": "send_message"}},
         ],
         "edges": [
-            ["trigger", "aria"],
-            ["aria", "check_urgency"],
-            ["check_urgency", "kai"],
+            ["trigger", "triage"],
+            ["triage", "check_urgency"],
+            ["check_urgency", "escalation"],
             ["check_urgency", "auto_reply"],
-            ["kai", "auto_reply"],
+            ["escalation", "auto_reply"],
         ]
     },
 }

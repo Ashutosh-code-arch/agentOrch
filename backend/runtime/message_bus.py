@@ -47,11 +47,24 @@ class RedisQueue:
         self._stream = stream_name
         self._consumer_group = "agentOrch-workers"
         self._consumer_id = f"worker-{uuid.uuid4().hex[:8]}"
+        self._group_ready = False
+
+    async def start(self):
+        try:
+            await self._redis.xgroup_create(
+                self._stream, self._consumer_group, id="0", mkstream=True
+            )
+        except Exception as e:
+            if "BUSYGROUP" not in str(e):
+                raise
+        self._group_ready = True
 
     async def put(self, msg: AgentMessage):
         await self._redis.xadd(self._stream, {"data": json.dumps(asdict(msg))})
 
     async def get(self) -> AgentMessage:
+        if not self._group_ready:
+            await self.start()
         results = await self._redis.xreadgroup(
             self._consumer_group,
             self._consumer_id,
@@ -83,6 +96,7 @@ class MessageBus:
         if redis_url:
             try:
                 self._queue = RedisQueue(redis_url)
+                await self._queue.start()
                 logger.info("Message bus using Redis: %s", redis_url)
             except Exception as e:
                 logger.warning(

@@ -108,9 +108,8 @@ agentOrch/
 │   │   ├── agent_runtime.py       # LangGraph agent execution
 │   │   └── tool_registry.py       # Available tools registry
 │   ├── workflows/
-│   │   ├── workflow_model.py      # Workflow DB model
 │   │   ├── workflow_engine.py     # LangGraph StateGraph builder
-│   │   └── templates.py           # Pre-built workflow templates
+│   │   └── __init__.py
 │   ├── channels/
 │   │   ├── telegram_handler.py    # Telegram bot + webhook
 │   │   └── slack_handler.py       # Slack events API
@@ -170,40 +169,44 @@ Each agent is configurable across **11 dimensions**:
 
 ## Adding a New Workflow Template
 
-1. Open `backend/workflows/templates.py`
-2. Add to `WORKFLOW_TEMPLATES` dict:
+1. Open `backend/workflows/workflow_engine.py`.
+2. Add a new entry to the `WORKFLOW_TEMPLATES` dict. Use role-based labels/config instead of hard-coded demo agent names, so the UI can bind the template to real active agents:
 
 ```python
-"my_template": WorkflowTemplate(
-    name="My Template",
-    description="What it does",
-    nodes=[
-        NodeConfig(id="trigger", type="trigger", config={"channel": "telegram"}),
-        NodeConfig(id="agent1", type="agent", config={"agent_id": "...", "tools": ["web_search"]}),
-        NodeConfig(id="action", type="action", config={"action": "send_message"}),
+"my_template": {
+    "name": "My Template",
+    "description": "What it does",
+    "nodes": [
+        {"id": "trigger", "type": "trigger", "label": "Telegram Message", "config": {"channel": "telegram"}},
+        {"id": "agent1", "type": "agent", "label": "Research Agent", "config": {"role": "research", "tools": ["web_search"]}},
+        {"id": "action", "type": "action", "label": "Send to Telegram", "config": {"action": "send_message", "channel": "telegram"}},
     ],
-    edges=[("trigger","agent1"), ("agent1","action")],
-)
+    "edges": [["trigger", "agent1"], ["agent1", "action"]],
+}
 ```
 
-3. The template appears in the UI automatically on next restart.
+3. Add the matching front-end visual template in `frontend/src/lib/workflowData.ts` with the same `id`, node ids, and edges.
+4. Restart the backend/frontend. The template appears in the Workflow Builder tabs and can be run through `POST /api/workflows/{template_id}/run`.
 
 ---
 
 ## Adding a New Messaging Channel
 
-1. Create `backend/channels/your_channel.py` implementing `BaseChannelHandler`:
+1. Create `backend/channels/your_channel.py` with the same shape as `telegram_handler.py` or `slack_handler.py`:
 
 ```python
-class YourChannelHandler(BaseChannelHandler):
-    async def start(self): ...           # setup webhook/polling
+class YourChannelHandler:
+    async def start(self): ...           # setup webhook, polling, or socket mode
     async def send_message(self, to, text): ...
-    async def on_message(self, msg): ...  # called by the runtime
+    async def _on_message(self, event): ...  # publish inbound AgentMessage
+    async def _on_bus_message(self, msg): ...  # deliver outbound channel_reply
 ```
 
 2. Register in `backend/channels/__init__.py`
-3. Add the channel option to the Agent model's `channel` enum
-4. Add the UI card in `frontend/src/pages/channels.tsx`
+3. Start it from `backend/main.py` when the required environment variables are present.
+4. Add the channel option to `frontend/src/components/AgentModal.tsx`.
+5. Add setup/status UI in `frontend/src/app/channels/page.tsx`.
+6. Publish inbound messages with `metadata={"channel": "<name>"}` and subscribe to `<name>_channel` for outbound replies.
 
 ---
 

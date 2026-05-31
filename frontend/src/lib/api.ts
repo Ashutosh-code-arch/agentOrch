@@ -12,9 +12,14 @@ export interface Agent {
     memory_window: number;
     schedule: string | null;
     guardrails: string[];
+    max_tokens_per_call: number;
+    max_tokens_per_day: number | null;
+    interaction_rules: Record<string, unknown>;
+    skills: string[];
     is_active: boolean;
     total_tasks: number;
     total_tokens: number;
+    total_cost_usd: string;
     created_at: string;
 }
 
@@ -126,14 +131,20 @@ export async function deleteAgent(id: string) {
     return api.delete(`/api/agents/${id}`);
 }
 
+export async function deleteSession(sessionId: string) {
+    return api.delete(`/api/messages/session/${encodeURIComponent(sessionId)}`);
+}
+
 export async function runWorkflow(
     workflowId: string,
     input: string,
     sessionId: string,
+    workflow?: unknown,
 ) {
     return api.post(`/api/workflows/${workflowId}/run`, {
         input,
         session_id: sessionId,
+        workflow,
     });
 }
 

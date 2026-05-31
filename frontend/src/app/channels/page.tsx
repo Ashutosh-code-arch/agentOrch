@@ -1,10 +1,17 @@
 "use client";
 import Shell from "@/components/Shell";
 import { useState } from "react";
+import { useAgents } from "@/lib/api";
 
 export default function ChannelsPage() {
+  const { agents } = useAgents();
+  const telegramAgents = agents.filter(
+    (a) => a.is_active && a.channel?.toLowerCase() === "telegram",
+  );
   const [telegramToken, setTelegramToken] = useState("7412***:AAF4***");
-  const [assignedAgent, setAssignedAgent] = useState("Aria — Support Agent");
+  const [assignedAgent, setAssignedAgent] = useState("");
+  const selectedTelegramAgent =
+    telegramAgents.find((a) => a.id === assignedAgent) ?? telegramAgents[0];
 
   return (
     <Shell>
@@ -20,9 +27,13 @@ export default function ChannelsPage() {
         <div className="card" style={{ borderColor: "rgba(6,182,212,0.4)" }}>
           <div style={{ fontSize: 22, marginBottom: 8 }}>✈️</div>
           <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>Telegram</div>
-          <div style={{ fontSize: 11, color: "var(--accent2)", marginBottom: 10 }}>● Connected · @ariabot</div>
+          <div style={{ fontSize: 11, color: selectedTelegramAgent ? "var(--accent2)" : "var(--text3)", marginBottom: 10 }}>
+            {selectedTelegramAgent ? "● Connected" : "○ Waiting for agent"}
+          </div>
           <div style={{ fontSize: 11, color: "var(--text2)", lineHeight: 1.5, marginBottom: 12 }}>
-            Aria is reachable via Telegram. Users can message the bot to interact with the agent.
+            {selectedTelegramAgent
+              ? `${selectedTelegramAgent.name} is reachable via Telegram. Users can message the bot to interact with the agent.`
+              : "Create or edit an active agent with channel set to Telegram."}
           </div>
           <div className="form-group">
             <div className="form-label">Bot Token</div>
@@ -30,10 +41,15 @@ export default function ChannelsPage() {
           </div>
           <div className="form-group" style={{ marginTop: 8 }}>
             <div className="form-label">Assigned Agent</div>
-            <select className="form-select" value={assignedAgent} onChange={(e) => setAssignedAgent(e.target.value)}>
-              <option>Aria — Support Agent</option>
-              <option>Max — Research Agent</option>
-              <option>Zoe — Content Writer</option>
+            <select className="form-select" value={selectedTelegramAgent?.id ?? ""} onChange={(e) => setAssignedAgent(e.target.value)}>
+              {telegramAgents.length === 0 && (
+                <option value="">No active Telegram agents</option>
+              )}
+              {telegramAgents.map((agent) => (
+                <option key={agent.id} value={agent.id}>
+                  {agent.name} — {agent.role}
+                </option>
+              ))}
             </select>
           </div>
           <div style={{ display: "flex", gap: 6, marginTop: 12 }}>

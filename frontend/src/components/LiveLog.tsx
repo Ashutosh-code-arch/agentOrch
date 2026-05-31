@@ -13,8 +13,32 @@ const LEVEL_COLORS: Record<string, string> = {
     delegate: "var(--accent3)",
 };
 
+const INTERNAL_DIRECTIVE_RE =
+    /\b(?:DELEGATE_TO|ROUTE_TO)_[A-Z0-9_ -]+:\s*[^\n]*(?:\n|$)/gi;
+
 function msgToLevel(msgType: string): string {
     return LEVEL_COLORS[msgType] ? msgType : "msg";
+}
+
+function cleanLogMessage(content: string) {
+    return content
+        .replace(INTERNAL_DIRECTIVE_RE, "")
+        .replace(/\[INTERNAL:[^\]]*\]\n?/gi, "")
+        .replace(/\[LOG:[^\]]*\]\n?/gi, "")
+        .replace(/\*\*Delegation to [^:*]+:\s*/gi, "**")
+        .replace(/^Delegation to [^:]+:\s*/gi, "")
+        .trim();
+}
+
+function formatLogTime(timestamp: string) {
+    const hasTimezone = /(?:Z|[+-]\d{2}:?\d{2})$/.test(timestamp);
+    const date = new Date(hasTimezone ? timestamp : `${timestamp}Z`);
+    return date.toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+        hour12: false,
+    });
 }
 
 export default function LiveLog({
@@ -40,10 +64,11 @@ export default function LiveLog({
             level: msgToLevel(m.msg_type),
             agent: m.from_agent === "*" ? m.to_agent : `${m.from_agent}`,
             target: m.to_agent,
-            msg: m.content.slice(0, 150),
-            t: new Date(m.timestamp).toTimeString().slice(0, 8),
+            msg: cleanLogMessage(m.content).slice(0, 150),
+            t: formatLogTime(m.timestamp),
             raw: m,
         }))
+        .filter((r) => r.msg)
         // text search
         .filter(
             (r) =>

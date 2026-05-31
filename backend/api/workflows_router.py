@@ -77,8 +77,8 @@ async def run_workflow(
     from backend.agents.agent_runtime import AgentRuntime
     from backend.main import message_bus
 
-    # Load workflow config (from DB or template)
-    wf_config = WORKFLOW_TEMPLATES.get(workflow_id)
+    # Load workflow config (from request, DB, or template)
+    wf_config = body.get("workflow") or WORKFLOW_TEMPLATES.get(workflow_id)
     if not wf_config:
         raise HTTPException(404, "Workflow not found")
 

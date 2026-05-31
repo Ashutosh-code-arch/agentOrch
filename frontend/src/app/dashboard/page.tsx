@@ -12,6 +12,10 @@ export default function DashboardPage() {
     const running = agents.filter((a) => a.is_active).length;
     const totalTokens = agents.reduce((s, a) => s + (a.total_tokens || 0), 0);
     const totalTasks = agents.reduce((s, a) => s + (a.total_tasks || 0), 0);
+    const totalCost = agents.reduce(
+        (s, a) => s + Number(a.total_cost_usd || 0),
+        0,
+    );
 
     return (
         <Shell>
@@ -57,8 +61,8 @@ export default function DashboardPage() {
                         color: "orange",
                     },
                     {
-                        label: "Live Messages",
-                        value: String(liveMessages.length),
+                        label: "Cost",
+                        value: isLoading ? "..." : `$${totalCost.toFixed(4)}`,
                         color: "cyan",
                     },
                 ]}

@@ -47,7 +47,7 @@ class AgentCreate(BaseModel):
     name: str
     role: str
     system_prompt: str
-    model: str
+    model: str = "llama-3.3-70b-versatile"
     tools: list[str] = Field(default_factory=list)
     channel: Optional[str] = None
     memory_type: str = "window"
@@ -70,7 +70,13 @@ class AgentUpdate(BaseModel):
     tools: Optional[list[str]] = None
     channel: Optional[str] = None
     memory_type: Optional[str] = None
+    memory_window: Optional[int] = None
+    schedule: Optional[str] = None
     guardrails: Optional[list[str]] = None
+    max_tokens_per_call: Optional[int] = None
+    max_tokens_per_day: Optional[int] = None
+    interaction_rules: Optional[dict] = None
+    skills: Optional[list[str]] = None
     is_active: Optional[bool] = None
 
 
@@ -83,11 +89,17 @@ class AgentOut(BaseModel):
     tools: list[str]
     channel: Optional[str]
     memory_type: str
+    memory_window: int
     schedule: Optional[str]
     guardrails: list[str]
+    max_tokens_per_call: int
+    max_tokens_per_day: Optional[int]
+    interaction_rules: dict
+    skills: list[str]
     is_active: bool
     total_tasks: int
     total_tokens: int
+    total_cost_usd: str
     created_at: datetime
 
     class Config:

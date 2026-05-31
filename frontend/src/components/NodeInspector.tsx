@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { WorkflowDef } from "@/lib/workflowData";
 import { Agent } from "@/lib/api";
 
@@ -14,14 +14,40 @@ export default function NodeInspector({
     nodeId,
     workflow,
     agents = [],
+    onUpdateNode,
 }: {
     nodeId: string | null;
     workflow: WorkflowDef;
     agents?: Agent[];
+    onUpdateNode?: (
+        nodeId: string,
+        patch: {
+            label?: string;
+            sub?: string;
+            config?: Record<string, unknown>;
+        },
+    ) => void;
 }) {
     const node = workflow.nodes.find((n) => n.id === nodeId);
     const [label, setLabel] = useState(node?.label ?? "");
     const [sub, setSub] = useState(node?.sub ?? "");
+    const [agentId, setAgentId] = useState(
+        String(node?.config?.agent_id ?? ""),
+    );
+    const [expression, setExpression] = useState(
+        String(node?.config?.expression ?? node?.sub ?? ""),
+    );
+    const [action, setAction] = useState(
+        String(node?.config?.action ?? "send_message"),
+    );
+
+    useEffect(() => {
+        setLabel(node?.label ?? "");
+        setSub(node?.sub ?? "");
+        setAgentId(String(node?.config?.agent_id ?? ""));
+        setExpression(String(node?.config?.expression ?? node?.sub ?? ""));
+        setAction(String(node?.config?.action ?? "send_message"));
+    }, [node?.id, node?.label, node?.sub, node?.config]);
 
     if (!node) {
         return (
@@ -77,11 +103,25 @@ export default function NodeInspector({
             {node.type === "agent" && agents.length > 0 && (
                 <div className="form-group" style={{ marginTop: 8 }}>
                     <div className="form-label">Assign Agent</div>
-                    <select className="form-select" defaultValue={node.label}>
+                    <select
+                        className="form-select"
+                        value={agentId}
+                        onChange={(e) => {
+                            const selected = agents.find(
+                                (a) => a.id === e.target.value,
+                            );
+                            setAgentId(e.target.value);
+                            if (selected) {
+                                setLabel(selected.name);
+                                setSub(selected.role);
+                            }
+                        }}
+                    >
+                        <option value="">Unassigned</option>
                         {agents
                             .filter((a) => a.is_active)
                             .map((a) => (
-                                <option key={a.id} value={a.name}>
+                                <option key={a.id} value={a.id}>
                                     {a.name} — {a.role}
                                 </option>
                             ))}
@@ -95,7 +135,11 @@ export default function NodeInspector({
                     <input
                         className="form-input"
                         style={{ fontFamily: "monospace", fontSize: 11 }}
-                        defaultValue={node.sub}
+                        value={expression}
+                        onChange={(e) => {
+                            setExpression(e.target.value);
+                            setSub(e.target.value);
+                        }}
                     />
                     <div
                         style={{
@@ -115,7 +159,14 @@ export default function NodeInspector({
             {node.type === "action" && (
                 <div className="form-group" style={{ marginTop: 8 }}>
                     <div className="form-label">Action Type</div>
-                    <select className="form-select" defaultValue="send_message">
+                    <select
+                        className="form-select"
+                        value={action}
+                        onChange={(e) => {
+                            setAction(e.target.value);
+                            setSub(e.target.value);
+                        }}
+                    >
                         <option value="send_message">
                             Send Message (Telegram)
                         </option>
@@ -131,6 +182,15 @@ export default function NodeInspector({
             <button
                 className="btn-primary"
                 style={{ width: "100%", marginTop: 12, fontSize: 11 }}
+                onClick={() => {
+                    const config: Record<string, unknown> = {};
+                    if (node.type === "agent" && agentId)
+                        config.agent_id = agentId;
+                    if (node.type === "condition")
+                        config.expression = expression;
+                    if (node.type === "action") config.action = action;
+                    onUpdateNode?.(node.id, { label, sub, config });
+                }}
             >
                 Apply Changes
             </button>

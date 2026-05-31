@@ -225,6 +225,20 @@ export default function AgentCard({
                     </span>
                     tokens
                 </div>
+                <div style={{ fontSize: 10, color: "var(--text2)" }}>
+                    <span
+                        style={{
+                            display: "block",
+                            fontSize: 13,
+                            fontWeight: 600,
+                            color: "var(--text)",
+                            fontFamily: "monospace",
+                        }}
+                    >
+                        ${Number(agent.total_cost_usd || 0).toFixed(4)}
+                    </span>
+                    cost
+                </div>
                 <div style={{ marginLeft: "auto", display: "flex", gap: 5 }}>
                     <button
                         onClick={toggle}

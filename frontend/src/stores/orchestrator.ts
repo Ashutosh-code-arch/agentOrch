@@ -13,11 +13,17 @@ export interface Agent {
     tools: string[];
     channel: string | null;
     memory_type: string;
+    memory_window: number;
     schedule: string | null;
     guardrails: string[];
+    max_tokens_per_call: number;
+    max_tokens_per_day: number | null;
+    interaction_rules: Record<string, unknown>;
+    skills: string[];
     is_active: boolean;
     total_tasks: number;
     total_tokens: number;
+    total_cost_usd: string;
     created_at: string;
 }
 

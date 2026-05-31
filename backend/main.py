@@ -13,7 +13,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from backend.api.agents_router import router as agents_router
 from backend.api.workflows_router import router as workflows_router
 from backend.api.messages_router import router as messages_router
-from backend.api.ws_router import router as ws_router
+from backend.api.ws_router import router as ws_router, set_message_bus
 from backend.channels.telegram_handler import TelegramHandler
 from backend.runtime.message_bus import MessageBus
 from backend.database import init_db
@@ -28,6 +28,7 @@ telegram_handler: TelegramHandler | None = None
 async def lifespan(app: FastAPI):
     """Start/stop background services on app lifecycle."""
     await init_db()
+    set_message_bus(message_bus)
     await message_bus.start()
 
     # Start Telegram bot if token configured

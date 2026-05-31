@@ -64,6 +64,7 @@ class TelegramHandler:
         self.agent_runtime = agent_runtime
         self._app: Application | None = None
         self._bot: Bot | None = None
+        self._processed_update_ids: set[int] = set()
 
     async def _load_agent_runtime(self):
         """Load the first active Telegram-channel agent from the database."""
@@ -265,6 +266,13 @@ class TelegramHandler:
     # ── Message handler ───────────────────────────────────────────────────────
 
     async def _on_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        if update.update_id in self._processed_update_ids:
+            logger.info("Skipping duplicate Telegram update: %s", update.update_id)
+            return
+        self._processed_update_ids.add(update.update_id)
+        if len(self._processed_update_ids) > 500:
+            self._processed_update_ids = set(list(self._processed_update_ids)[-250:])
+
         user_msg = update.message.text
         chat_id = update.effective_chat.id
         session_id = f"tg_{chat_id}"
@@ -302,30 +310,101 @@ class TelegramHandler:
         await update.message.chat.send_action("typing")
 
         try:
-            from backend.agents.delegation import run_with_research_delegation
+            from backend.agents.delegation import is_research_request
             from backend.database import AsyncSessionLocal
 
             async with AsyncSessionLocal() as db:
-                response = await run_with_research_delegation(
-                    entry_agent=self.agent_runtime.agent,
+                if is_research_request(user_msg):
+                    response = await self._run_research_workflow(
+                        user_msg=user_msg,
+                        session_id=session_id,
+                        chat_id=chat_id,
+                        db=db,
+                    )
+                    if response is not None:
+                        await self.send_message(chat_id, response)
+                        return
+
+                response = await self.agent_runtime.run(
                     user_message=user_msg,
                     session_id=session_id,
                     context={"channel": "telegram", "chat_id": chat_id},
-                    db=db,
-                    message_bus=self.message_bus,
                 )
-            clean = clean_response(response)
-            if not clean:
-                clean = (
-                    "I could not produce a final answer. Please check the live logs "
-                    "for the model or tool error."
-                )
+                clean = clean_response(response)
+                if not clean:
+                    clean = (
+                        "I could not produce a final answer. Please check the live logs "
+                        "for the model or tool error."
+                    )
             await self.send_message(chat_id, clean)
 
         except Exception as e:
             logger.exception("Agent runtime error: %s", e)
             await update.message.reply_text(
-                f"⚠️ Error: {str(e)[:200]}\n\nPlease try again."
+                "I ran into a temporary issue while preparing that answer. "
+                "Please try again in a moment."
+            )
+
+    async def _run_research_workflow(
+        self,
+        *,
+        user_msg: str,
+        session_id: str,
+        chat_id: int,
+        db,
+    ) -> str | None:
+        """Run Telegram research messages through the Research Pipeline."""
+        try:
+            from backend.agents.agent_model import list_agents
+            from backend.agents.agent_runtime import AgentRuntime
+            from backend.workflows.workflow_engine import (
+                WORKFLOW_TEMPLATES,
+                WorkflowEngine,
+            )
+
+            workflow = WORKFLOW_TEMPLATES.get("research_summarize_publish")
+            if not workflow:
+                return None
+
+            agents = await list_agents(db, active_only=True)
+            runtimes = {}
+            for agent in agents:
+                runtime = AgentRuntime(agent=agent, message_bus=self.message_bus)
+                runtimes[agent.id] = runtime
+                runtimes[agent.name.lower()] = runtime
+                runtimes[agent.role.lower()] = runtime
+
+            engine = WorkflowEngine(
+                workflow_config=workflow,
+                message_bus=self.message_bus,
+                agent_runtimes=runtimes,
+            )
+            result = await engine.run(
+                input_text=user_msg,
+                session_id=session_id,
+                context={
+                    "channel": "telegram",
+                    "chat_id": chat_id,
+                    "force_research": True,
+                    "suppress_channel_reply": True,
+                },
+            )
+            if result.error:
+                logger.warning("Research workflow failed: %s", result.error)
+                return (
+                    "I could not complete the research workflow right now. "
+                    "Please try again in a moment."
+                )
+            clean = clean_response(result.output)
+            return clean or (
+                "I could not prepare a clear answer from the research workflow. "
+                "Please try again in a moment."
+            )
+        except Exception as e:
+            logger.exception("Research workflow error: %s", e)
+            return (
+                "I ran into a temporary issue while researching that. "
+                "Please try again in a moment."
             )
 
     async def _on_bus_message(self, msg: AgentMessage):

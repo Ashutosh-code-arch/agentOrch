@@ -32,6 +32,10 @@ export default function MonitorPage() {
     });
 
     const running = agents.filter((a) => a.is_active).length;
+    const totalCost = agents.reduce(
+        (sum, a) => sum + Number(a.total_cost_usd || 0),
+        0,
+    );
 
     return (
         <Shell>
@@ -111,10 +115,8 @@ export default function MonitorPage() {
                         color: "accent",
                     },
                     {
-                        label: "Unique Sessions",
-                        value: String(
-                            new Set(liveMessages.map((m) => m.session_id)).size,
-                        ),
+                        label: "Tracked Cost",
+                        value: `$${totalCost.toFixed(4)}`,
                         color: "orange",
                     },
                 ]}

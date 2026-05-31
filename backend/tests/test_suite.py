@@ -17,7 +17,11 @@ from backend.agents.agent_model import (
 )
 from backend.runtime.message_bus import MessageBus, AgentMessage
 from backend.workflows.workflow_engine import WorkflowEngine, WORKFLOW_TEMPLATES
-from backend.agents.delegation import find_research_agent, is_research_request
+from backend.agents.delegation import (
+    find_delegate_agent,
+    find_research_agent,
+    is_research_request,
+)
 from backend.agents.agent_runtime import extract_xml_tool_calls
 
 
@@ -273,6 +277,9 @@ class TestAgentDelegation:
         assert is_research_request(
             "Can you research what Groq's LPU chip is and compare it to GPU inference?"
         )
+        assert is_research_request(
+            "How are AI agents being used in healthcare in 2026, and what are the biggest limitations?"
+        )
         assert not is_research_request("Please update my billing address")
 
     @pytest.mark.asyncio
@@ -298,6 +305,37 @@ class TestAgentDelegation:
         )
 
         found = await find_research_agent(db, exclude_agent_id=support.id)
+        assert found is not None
+        assert found.id == research.id
+
+    @pytest.mark.asyncio
+    async def test_stale_max_delegate_resolves_to_research_agent(self, db):
+        support = await create_agent(
+            db,
+            AgentCreate(
+                name="Kaira",
+                role="Support Agent",
+                system_prompt="Help users and route specialist work.",
+                tools=[],
+                channel="telegram",
+            ),
+        )
+        research = await create_agent(
+            db,
+            AgentCreate(
+                name="Researcher",
+                role="Research Agent",
+                system_prompt="Research topics in detail.",
+                tools=["web_search"],
+            ),
+        )
+
+        found = await find_delegate_agent(
+            db,
+            target="max",
+            task="Research current applications and limitations of AI agents in healthcare in 2026.",
+            exclude_agent_id=support.id,
+        )
         assert found is not None
         assert found.id == research.id
 

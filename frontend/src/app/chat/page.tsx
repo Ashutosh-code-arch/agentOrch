@@ -1,7 +1,33 @@
 "use client";
 import { useState, useEffect, useRef } from "react";
 import Shell from "@/components/Shell";
-import { useMessages, useSessions, runAgent, useAgents } from "@/lib/api";
+import {
+    deleteSession,
+    runAgent,
+    useAgents,
+    useMessages,
+    useSessions,
+} from "@/lib/api";
+
+const INTERNAL_DIRECTIVE_RE =
+    /\b(?:DELEGATE_TO|ROUTE_TO)_[A-Z0-9_ -]+:\s*[^\n]*(?:\n|$)/gi;
+
+function cleanMessageContent(content: string) {
+    return content
+        .replace(INTERNAL_DIRECTIVE_RE, "")
+        .replace(/\[INTERNAL:[^\]]*\]\n?/gi, "")
+        .replace(/\[LOG:[^\]]*\]\n?/gi, "")
+        .trim();
+}
+
+function formatMessageTime(createdAt: string) {
+    const hasTimezone = /(?:Z|[+-]\d{2}:?\d{2})$/.test(createdAt);
+    const date = new Date(hasTimezone ? createdAt : `${createdAt}Z`);
+    return date.toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit",
+    });
+}
 
 export default function ChatPage() {
     const { sessions, mutate: mutateSessions } = useSessions();
@@ -51,6 +77,22 @@ export default function ChatPage() {
             e.preventDefault();
             send();
         }
+    }
+
+    async function removeSession(
+        e: React.MouseEvent<HTMLButtonElement>,
+        sid: string,
+    ) {
+        e.stopPropagation();
+        if (!window.confirm(`Delete conversation "${sessionLabel(sid)}"?`))
+            return;
+
+        await deleteSession(sid);
+        if (activeSession === sid) {
+            const next = sessions.find((session) => session !== sid) ?? null;
+            setActiveSession(next);
+        }
+        await Promise.all([mutateSessions(), mutateMessages()]);
     }
 
     const sessionLabel = (sid: string) => {
@@ -145,6 +187,24 @@ export default function ChatPage() {
                                             : "Web UI"}
                                     </div>
                                 </div>
+                                <button
+                                    aria-label={`Delete ${sessionLabel(sid)}`}
+                                    title="Delete conversation"
+                                    onClick={(e) => removeSession(e, sid)}
+                                    style={{
+                                        width: 24,
+                                        height: 24,
+                                        border: "1px solid transparent",
+                                        borderRadius: 6,
+                                        background: "transparent",
+                                        color: "var(--text3)",
+                                        cursor: "pointer",
+                                        flexShrink: 0,
+                                        lineHeight: 1,
+                                    }}
+                                >
+                                    x
+                                </button>
                             </div>
                         ))
                     )}
@@ -235,6 +295,10 @@ export default function ChatPage() {
                             </div>
                         ) : (
                             [...messages].reverse().map((m) => {
+                                const displayContent = cleanMessageContent(
+                                    m.content,
+                                );
+                                if (!displayContent) return null;
                                 const isUser =
                                     m.from_agent.startsWith("telegram:") ||
                                     m.from_agent.startsWith("ui:") ||
@@ -288,7 +352,7 @@ export default function ChatPage() {
                                                         : "var(--text)",
                                                 }}
                                             >
-                                                {m.content}
+                                                {displayContent}
                                             </div>
                                             <div
                                                 style={{
@@ -305,13 +369,7 @@ export default function ChatPage() {
                                                     "telegram:",
                                                     "@",
                                                 )}{" "}
-                                                ·{" "}
-                                                {new Date(
-                                                    m.created_at,
-                                                ).toLocaleTimeString([], {
-                                                    hour: "2-digit",
-                                                    minute: "2-digit",
-                                                })}
+                                                · {formatMessageTime(m.created_at)}
                                             </div>
                                         </div>
                                     </div>
