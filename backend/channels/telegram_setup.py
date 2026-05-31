@@ -1,22 +1,3 @@
-"""
-telegram_setup.py
------------------
-Run this once to register your webhook URL with Telegram.
-
-Usage:
-    # Polling mode (local dev) — no setup needed, just start the backend.
-
-    # Webhook mode (production / ngrok):
-    #   1. Start ngrok:  ngrok http 8000
-    #   2. Copy the https URL into .env as WEBHOOK_URL=https://abc.ngrok-free.app
-    #   3. Run:  python -m channels.telegram_setup
-
-The script will:
-  - Print current webhook info
-  - Set the new webhook URL  (if WEBHOOK_URL is set)
-  - Delete the webhook       (if --delete flag is passed)
-"""
-
 import asyncio
 import os
 import sys

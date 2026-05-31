@@ -1,7 +1,3 @@
-"""
-Workflow Engine — builds LangGraph StateGraphs from visual workflow configs.
-Supports: sequential chains, conditional branching, feedback loops, parallel fans.
-"""
 import logging
 import json
 import re
@@ -32,6 +28,7 @@ def clean_workflow_output(text: str) -> str:
 @dataclass
 class WorkflowState:
     """Shared state passed through the entire workflow graph."""
+
     input: str = ""
     session_id: str = ""
     context: dict = field(default_factory=dict)
@@ -45,7 +42,7 @@ class WorkflowState:
 @dataclass
 class NodeConfig:
     id: str
-    type: str              # "trigger" | "agent" | "condition" | "action"
+    type: str  # "trigger" | "agent" | "condition" | "action"
     config: dict = field(default_factory=dict)
     label: str = ""
 
@@ -56,7 +53,9 @@ class WorkflowTemplate:
     description: str
     nodes: list[NodeConfig]
     edges: list[tuple[str, str]]
-    conditional_edges: dict = field(default_factory=dict)  # node_id → {condition_fn, routes}
+    conditional_edges: dict = field(
+        default_factory=dict
+    )  # node_id → {condition_fn, routes}
 
 
 class WorkflowEngine:
@@ -64,7 +63,9 @@ class WorkflowEngine:
     Builds and executes a LangGraph StateGraph from a workflow definition.
     """
 
-    def __init__(self, workflow_config: dict, message_bus: MessageBus, agent_runtimes: dict):
+    def __init__(
+        self, workflow_config: dict, message_bus: MessageBus, agent_runtimes: dict
+    ):
         """
         workflow_config: dict with 'nodes' and 'edges' (from DB or template)
         agent_runtimes: dict[agent_id → AgentRuntime]
@@ -91,8 +92,12 @@ class WorkflowEngine:
         if role_hint:
             for key, runtime in self.agent_runtimes.items():
                 agent = getattr(runtime, "agent", None)
-                haystack = f"{getattr(agent, 'name', '')} {getattr(agent, 'role', '')}".lower()
-                if role_hint in haystack or any(part and part in haystack for part in role_hint.split()):
+                haystack = (
+                    f"{getattr(agent, 'name', '')} {getattr(agent, 'role', '')}".lower()
+                )
+                if role_hint in haystack or any(
+                    part and part in haystack for part in role_hint.split()
+                ):
                     return runtime
         return None
 
@@ -148,7 +153,10 @@ class WorkflowEngine:
 
         for from_id, to_id in edges:
             from_node = nodes_by_id.get(from_id, {})
-            if from_node.get("type") == "condition" and len(edges_by_source[from_id]) > 1:
+            if (
+                from_node.get("type") == "condition"
+                and len(edges_by_source[from_id]) > 1
+            ):
                 continue
             graph.add_edge(from_id, to_id)
 
@@ -157,7 +165,9 @@ class WorkflowEngine:
             if from_node.get("type") != "condition" or len(targets) <= 1:
                 continue
 
-            def route_condition(state: WorkflowState, node_id=from_id, route_targets=targets):
+            def route_condition(
+                state: WorkflowState, node_id=from_id, route_targets=targets
+            ):
                 passed = bool(state.context.get(f"cond_{node_id}"))
                 true_target = next(
                     (
@@ -185,7 +195,9 @@ class WorkflowEngine:
 
         # Find terminal nodes (no outgoing edges) → connect to END
         sources = set(edges_by_source)
-        terminal = (node_ids - sources) | {n["id"] for n in nodes if n["type"] == "action"}
+        terminal = (node_ids - sources) | {
+            n["id"] for n in nodes if n["type"] == "action"
+        }
         for t_id in terminal:
             if t_id in sources:
                 continue
@@ -195,7 +207,9 @@ class WorkflowEngine:
                 pass
 
         self._graph = graph.compile()
-        logger.info("Workflow graph compiled: %d nodes, %d edges", len(nodes), len(edges))
+        logger.info(
+            "Workflow graph compiled: %d nodes, %d edges", len(nodes), len(edges)
+        )
 
     def _build_node_fn(self, node: dict) -> Callable:
         """Return an async function for a given node type."""
@@ -203,10 +217,12 @@ class WorkflowEngine:
         node_cfg = node.get("config", {})
 
         if node_type == "trigger":
+
             async def trigger_node(state: WorkflowState) -> WorkflowState:
                 state.current_node = node["id"]
                 logger.info("Workflow triggered: %s", state.input[:80])
                 return state
+
             return trigger_node
 
         elif node_type == "agent":
@@ -217,13 +233,12 @@ class WorkflowEngine:
                 role = str(node_cfg.get("role", "")).lower()
                 runtime = self._resolve_runtime(node)
                 if not runtime:
-                    state.error = f"Agent {agent_id or node.get('label', node['id'])} not found"
+                    state.error = (
+                        f"Agent {agent_id or node.get('label', node['id'])} not found"
+                    )
                     return state
                 try:
-                    if (
-                        state.context.get("force_research")
-                        and role == "support"
-                    ):
+                    if state.context.get("force_research") and role == "support":
                         result = "Research request routed to the research pipeline."
                         agent_name = getattr(
                             getattr(runtime, "agent", None),
@@ -277,6 +292,7 @@ class WorkflowEngine:
                     else:
                         state.error = str(e)
                 return state
+
             return agent_node
 
         elif node_type == "condition":
@@ -285,12 +301,15 @@ class WorkflowEngine:
             async def condition_node(state: WorkflowState) -> WorkflowState:
                 state.current_node = node["id"]
                 try:
-                    result = eval(condition_expr, {"state": state, "output": state.output})
+                    result = eval(
+                        condition_expr, {"state": state, "output": state.output}
+                    )
                     state.context[f"cond_{node['id']}"] = bool(result)
                 except Exception as e:
                     logger.warning("Condition eval error: %s", e)
                     state.context[f"cond_{node['id']}"] = False
                 return state
+
             return condition_node
 
         elif node_type == "action":
@@ -305,43 +324,54 @@ class WorkflowEngine:
                     chat_id = state.context.get("chat_id")
                     content = clean_workflow_output(state.output)
                     if state.context.get("suppress_channel_reply"):
-                        await self.message_bus.publish(AgentMessage(
-                            from_agent="workflow",
-                            to_agent="monitor",
-                            content=content,
-                            session_id=state.session_id,
-                            msg_type="response",
-                            metadata={"channel": channel},
-                        ))
+                        await self.message_bus.publish(
+                            AgentMessage(
+                                from_agent="workflow",
+                                to_agent="monitor",
+                                content=content,
+                                session_id=state.session_id,
+                                msg_type="response",
+                                metadata={"channel": channel},
+                            )
+                        )
                     elif channel == "telegram" and chat_id:
-                        await self.message_bus.publish(AgentMessage(
-                            from_agent="workflow",
-                            to_agent="telegram_channel",
-                            content=content,
-                            session_id=state.session_id,
-                            msg_type="channel_reply",
-                            metadata={"channel": channel, "chat_id": chat_id},
-                        ))
+                        await self.message_bus.publish(
+                            AgentMessage(
+                                from_agent="workflow",
+                                to_agent="telegram_channel",
+                                content=content,
+                                session_id=state.session_id,
+                                msg_type="channel_reply",
+                                metadata={"channel": channel, "chat_id": chat_id},
+                            )
+                        )
                     else:
-                        await self.message_bus.publish(AgentMessage(
-                            from_agent="workflow",
-                            to_agent="monitor",
-                            content=content,
-                            session_id=state.session_id,
-                            msg_type="response",
-                            metadata={"channel": channel},
-                        ))
+                        await self.message_bus.publish(
+                            AgentMessage(
+                                from_agent="workflow",
+                                to_agent="monitor",
+                                content=content,
+                                session_id=state.session_id,
+                                msg_type="response",
+                                metadata={"channel": channel},
+                            )
+                        )
                 elif action_type == "log":
                     logger.info("Workflow action [log]: %s", state.output[:200])
                 return state
+
             return action_node
 
         else:
+
             async def passthrough(state: WorkflowState) -> WorkflowState:
                 return state
+
             return passthrough
 
-    async def run(self, input_text: str, session_id: str, context: dict | None = None) -> WorkflowState:
+    async def run(
+        self, input_text: str, session_id: str, context: dict | None = None
+    ) -> WorkflowState:
         """Execute the workflow for a given input."""
         if not self._graph:
             await self.build()
@@ -365,12 +395,44 @@ WORKFLOW_TEMPLATES = {
         "name": "Research → Summarize → Publish",
         "description": "A triage agent routes research requests to research and writer agents, then publishes the result.",
         "nodes": [
-            {"id": "trigger", "type": "trigger", "label": "Telegram Message", "config": {"channel": "telegram"}},
-            {"id": "triage", "type": "agent", "label": "Support / Triage Agent", "config": {"role": "support"}},
-            {"id": "check_research", "type": "condition", "label": "Is research?", "config": {"expression": "'research' in state.output.lower() or state.context.get('force_research', False)"}},
-            {"id": "research", "type": "agent", "label": "Research Agent", "config": {"role": "research", "tools": ["web_search"]}},
-            {"id": "writer", "type": "agent", "label": "Writer Agent", "config": {"role": "writer"}},
-            {"id": "publish", "type": "action", "label": "Send to Telegram", "config": {"action": "send_message", "channel": "telegram"}},
+            {
+                "id": "trigger",
+                "type": "trigger",
+                "label": "Telegram Message",
+                "config": {"channel": "telegram"},
+            },
+            {
+                "id": "triage",
+                "type": "agent",
+                "label": "Support / Triage Agent",
+                "config": {"role": "support"},
+            },
+            {
+                "id": "check_research",
+                "type": "condition",
+                "label": "Is research?",
+                "config": {
+                    "expression": "'research' in state.output.lower() or state.context.get('force_research', False)"
+                },
+            },
+            {
+                "id": "research",
+                "type": "agent",
+                "label": "Research Agent",
+                "config": {"role": "research", "tools": ["web_search"]},
+            },
+            {
+                "id": "writer",
+                "type": "agent",
+                "label": "Writer Agent",
+                "config": {"role": "writer"},
+            },
+            {
+                "id": "publish",
+                "type": "action",
+                "label": "Send to Telegram",
+                "config": {"action": "send_message", "channel": "telegram"},
+            },
         ],
         "edges": [
             ["trigger", "triage"],
@@ -379,17 +441,44 @@ WORKFLOW_TEMPLATES = {
             ["check_research", "research"],
             ["research", "writer"],
             ["writer", "publish"],
-        ]
+        ],
     },
     "support_triage": {
         "name": "Support Triage System",
         "description": "A support agent receives messages, classifies urgency, and routes to an escalation agent when needed.",
         "nodes": [
-            {"id": "trigger", "type": "trigger", "label": "Inbound Message", "config": {}},
-            {"id": "triage", "type": "agent", "label": "Support / Triage Agent", "config": {"role": "support"}},
-            {"id": "check_urgency", "type": "condition", "label": "Urgent?", "config": {"expression": "'urgent' in state.output.lower() or 'emergency' in state.output.lower()"}},
-            {"id": "escalation", "type": "agent", "label": "Escalation Agent", "config": {"role": "escalation"}},
-            {"id": "auto_reply", "type": "action", "label": "Auto-Reply", "config": {"action": "send_message"}},
+            {
+                "id": "trigger",
+                "type": "trigger",
+                "label": "Inbound Message",
+                "config": {},
+            },
+            {
+                "id": "triage",
+                "type": "agent",
+                "label": "Support / Triage Agent",
+                "config": {"role": "support"},
+            },
+            {
+                "id": "check_urgency",
+                "type": "condition",
+                "label": "Urgent?",
+                "config": {
+                    "expression": "'urgent' in state.output.lower() or 'emergency' in state.output.lower()"
+                },
+            },
+            {
+                "id": "escalation",
+                "type": "agent",
+                "label": "Escalation Agent",
+                "config": {"role": "escalation"},
+            },
+            {
+                "id": "auto_reply",
+                "type": "action",
+                "label": "Auto-Reply",
+                "config": {"action": "send_message"},
+            },
         ],
         "edges": [
             ["trigger", "triage"],
@@ -397,7 +486,7 @@ WORKFLOW_TEMPLATES = {
             ["check_urgency", "escalation"],
             ["check_urgency", "auto_reply"],
             ["escalation", "auto_reply"],
-        ]
+        ],
     },
 }
 

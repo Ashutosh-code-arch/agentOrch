@@ -119,10 +119,10 @@ export default function SettingsPage() {
                     <div className="form-group">
                         <div className="form-label">Provider</div>
                         <select className="form-select">
+                            <option>Groq</option>
                             <option>Anthropic Claude</option>
                             <option>OpenAI</option>
                             <option>Google Gemini</option>
-                            <option>Groq</option>
                             <option>Ollama (local)</option>
                         </select>
                     </div>
@@ -131,17 +131,17 @@ export default function SettingsPage() {
                         <input
                             className="form-input"
                             type="password"
-                            defaultValue="sk-ant-api03-***"
+                            defaultValue="gsk-shk-api-***"
                         />
                     </div>
                     <div className="form-group" style={{ marginTop: 8 }}>
                         <div className="form-label">Default Model</div>
                         <select className="form-select">
+                            <option>llama-3.1-8b-instant</option>
                             <option>claude-sonnet-4-20250514</option>
                             <option>claude-haiku-4-5-20251001</option>
                             <option>gpt-4o-mini</option>
                             <option>gemini-1.5-flash</option>
-                            <option>llama-3.1-8b-instant</option>
                         </select>
                     </div>
                     <button className="btn-primary" style={{ marginTop: 12 }}>

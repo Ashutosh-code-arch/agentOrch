@@ -2,7 +2,10 @@
 
 > Build, configure, and orchestrate multi-agent AI workflows with a live web UI, async messaging, and real external channel integration.
 
-![Demo](docs/demo.gif)
+## Demo Video
+
+https://drive.google.com/file/d/1ZwJHIZwjUb94rIz8VyuZBnA9b9Jv7naY/view?usp=drive_link
+[Architecture](docs/architecture.md)
 
 ---
 
@@ -68,9 +71,11 @@
 ## Quick Start (single command)
 
 ```bash
-git clone https://github.com/Ashutosh-core-arch/agentOrch
+git clone https://github.com/Ashutosh-code-arch/agentOrch
 cd agentOrch
+cp .env.example .env            # fill in GROQ_API_KEY and TELEGRAM_BOT_TOKEN
 make setup   # installs all deps, seeds DB, starts all services
+make dev # start app
 ```
 
 Or manually:
@@ -88,11 +93,6 @@ uvicorn main:app --reload --port 8000
 cd frontend
 npm install
 npm run dev                    # http://localhost:3000
-
-# 3. Telegram webhook (new terminal, requires ngrok)
-ngrok http 8000
-# then set: WEBHOOK_URL=https://your-ngrok.ngrok-free.app in .env
-python -m backend.channels.telegram_setup
 ```
 
 ---
@@ -106,12 +106,14 @@ agentOrch/
 │   ├── agents/
 │   │   ├── agent_model.py         # Agent DB model + CRUD
 │   │   ├── agent_runtime.py       # LangGraph agent execution
+│   │   ├── delegation.py          # Agent delegation helpers
 │   │   └── tool_registry.py       # Available tools registry
 │   ├── workflows/
 │   │   ├── workflow_engine.py     # LangGraph StateGraph builder
 │   │   └── __init__.py
 │   ├── channels/
 │   │   ├── telegram_handler.py    # Telegram bot + webhook
+│   │   ├── telegram_setup.py      # webhook URL with Telegram
 │   │   └── slack_handler.py       # Slack events API
 │   ├── memory/
 │   │   └── vector_memory.py       # ChromaDB agent memory
@@ -123,20 +125,27 @@ agentOrch/
 │   ├── runtime/
 │   │   └── message_bus.py         # Async agent message queue
 │   └── tests/
-│       ├── test_agent_crud.py
-│       ├── test_workflow_execution.py
-│       └── test_message_delivery.py
+│   │   └── test_suite.py
+│   ├── database.py  
 ├── frontend/
 │   ├── src/
 │   │   ├── app/                   # Next.js app router pages
 │   │   ├── components/
 │   │   │   ├── AgentCard.tsx
-│   │   │   ├── WorkflowBuilder.tsx
-│   │   │   └── LiveLogStream.tsx
+│   │   │   ├── AgentModal.tsx
+│   │   │   ├── AgentRunModal.tsx
+│   │   │   ├── NodeInspector.tsx
+│   │   │   ├── Shell.tsx
+│   │   │   ├── StatsRow.tsx
+│   │   │   ├── WorkflowCanvas.tsx
+│   │   │   └── LiveLogs.tsx
 │   │   ├── stores/
 │   │   │   └── orchestrator.ts    # Zustand store
 │   │   └── hooks/
-│   │       └── useWebSocket.ts
+│   │   │   └── useWebSocket.ts
+│   │   ├── lib/
+│   │   │   ├── WorkflowData.ts
+│   │   │   └── api.ts
 │   └── package.json
 ├── docs/
 │   └── architecture.md
@@ -228,11 +237,6 @@ class YourChannelHandler:
 ```bash
 cd backend
 pytest tests/ -v
-
-# Key test paths:
-# tests/test_agent_crud.py         - agent CRUD operations
-# tests/test_workflow_execution.py - full workflow graph run
-# tests/test_message_delivery.py  - agent-to-agent routing
 ```
 
 ---

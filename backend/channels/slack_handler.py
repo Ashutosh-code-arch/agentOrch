@@ -1,15 +1,3 @@
-"""
-Slack Channel Handler
-Connects an agent to Slack using Socket Mode (no public URL needed).
-
-Requirements:
-  - SLACK_BOT_TOKEN  = xoxb-...   (Bot User OAuth Token)
-  - SLACK_APP_TOKEN  = xapp-...   (App-Level Token with connections:write scope)
-
-Enable Socket Mode in your Slack App settings:
-  https://api.slack.com/apps → Your App → Socket Mode → Enable
-"""
-
 import asyncio
 import logging
 import os
@@ -24,10 +12,6 @@ logger = logging.getLogger(__name__)
 
 
 class SlackHandler:
-    """
-    Wraps a Slack bot using Socket Mode via slack_sdk.
-    Routes inbound messages to the assigned agent runtime.
-    """
 
     def __init__(
         self,

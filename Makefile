@@ -18,7 +18,7 @@ setup:
 	@echo "→ Setting up AgentOrch..."
 	@cp -n .env.example .env 2>/dev/null || true
 	@echo "→ Backend: creating venv and installing deps..."
-	cd backend && python -m venv .venv && .venv/bin/pip install --quiet -r requirements.txt
+	cd backend && python3.11 -m venv .venv && .venv/bin/pip install --quiet -r requirements.txt
 	@echo "→ Backend: initializing database..."
 	backend/.venv/bin/python -c "import asyncio; from backend.database import init_db; asyncio.run(init_db())"
 	@echo "→ Frontend: installing Node deps..."
@@ -30,7 +30,7 @@ setup:
 dev:
 	@echo "→ Starting AgentOrch (backend + frontend)..."
 	@trap 'kill %1 %2' SIGINT; \
-	  (uvicorn backend.main:app --reload --port 8000) & \
+	  (backend/.venv/bin/python -m uvicorn backend.main:app --reload --port 8000) & \
 	  (cd frontend && npm run dev) & \
 	  wait
 

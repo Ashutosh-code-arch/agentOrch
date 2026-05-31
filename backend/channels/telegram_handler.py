@@ -332,10 +332,7 @@ class TelegramHandler:
                 )
                 clean = clean_response(response)
                 if not clean:
-                    clean = (
-                        "I could not produce a final answer. Please check the live logs "
-                        "for the model or tool error."
-                    )
+                    clean = "I couldn't find information related to your request."
             await self.send_message(chat_id, clean)
 
         except Exception as e:

@@ -1,10 +1,3 @@
-"""
-Agent delegation helpers.
-
-These helpers keep channel handlers and API routes thin while providing a real
-agent-to-agent handoff path for common workflows like support -> research.
-"""
-
 from __future__ import annotations
 
 import logging
